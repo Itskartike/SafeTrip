@@ -6,13 +6,13 @@ import json
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.core.mail import EmailMessage
-from django.core.signing import TimestampSigner
+from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 import secrets
 from django.utils import timezone
 from django.utils.html import format_html
 from datetime import timedelta
 
-from .models import OTPStorage
+from .models import OTPStorage, UserProfile
 User = get_user_model()
 # Create your views here.
 
@@ -32,6 +32,110 @@ def _auth_token_for_user(user_id: int) -> str:
     # Lightweight signed token (not JWT). You can validate later with TimestampSigner.unsign(...).
     signer = TimestampSigner(salt="safetrip-email-otp")
     return signer.sign(str(user_id))
+
+
+def _get_bearer_token(request):
+    auth = (request.headers.get("Authorization") or request.META.get("HTTP_AUTHORIZATION") or "").strip()
+    if not auth:
+        return ""
+    parts = auth.split()
+    if len(parts) == 1:
+        # Allow passing raw token (not recommended but convenient)
+        return parts[0]
+    if len(parts) >= 2 and parts[0].lower() in ("bearer", "token"):
+        return parts[1]
+    return ""
+
+
+def _auth_user_from_request(request):
+    """
+    Auth via signed token returned from verify_otp.
+    Header: Authorization: Bearer <token>
+    """
+    token = _get_bearer_token(request)
+    if not token:
+        return None, JsonResponse({"success": False, "message": "Missing Authorization token"}, status=401)
+
+    signer = TimestampSigner(salt="safetrip-email-otp")
+    max_age = int(getattr(settings, "AUTH_TOKEN_MAX_AGE_SECONDS", 60 * 60 * 24 * 30))  # 30 days default
+
+    try:
+        user_id_str = signer.unsign(token, max_age=max_age)
+    except SignatureExpired:
+        return None, JsonResponse({"success": False, "message": "Token expired"}, status=401)
+    except BadSignature:
+        return None, JsonResponse({"success": False, "message": "Invalid token"}, status=401)
+
+    try:
+        user = User.objects.get(id=int(user_id_str))
+    except Exception:
+        return None, JsonResponse({"success": False, "message": "User not found"}, status=401)
+    return user, None
+
+
+def _clean_phone(value: str) -> str:
+    s = (value or "").strip()
+    if not s:
+        return ""
+    # keep + at start, remove spaces/dashes
+    s = s.replace(" ", "").replace("-", "")
+    if s.startswith("+"):
+        rest = "".join([c for c in s[1:] if c.isdigit()])
+        return "+" + rest
+    return "".join([c for c in s if c.isdigit()])
+
+
+def _as_phone_list(value):
+    if not value:
+        return []
+    if isinstance(value, list):
+        out = []
+        for v in value:
+            p = _clean_phone(str(v))
+            if p:
+                out.append(p)
+        return out
+    if isinstance(value, str):
+        # Allow JSON string list, or comma-separated
+        raw = value.strip()
+        if raw.startswith("[") and raw.endswith("]"):
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    return _as_phone_list(parsed)
+            except Exception:
+                pass
+        return [p for p in [_clean_phone(v) for v in raw.split(",")] if p]
+    return []
+
+
+def _profile_to_dict(request, profile: UserProfile):
+    image_url = ""
+    try:
+        if profile.image and getattr(profile.image, "url", None):
+            image_url = request.build_absolute_uri(profile.image.url)
+    except Exception:
+        image_url = ""
+
+    return {
+        "user": {
+            "id": profile.user.id,
+            "username": profile.user.username,
+            "email": profile.user.email,
+            "contact_no": getattr(profile.user, "contact_no", "") or "",
+            "first_name": profile.user.first_name or "",
+            "last_name": profile.user.last_name or "",
+        },
+        "profile": {
+            "image_url": image_url,
+            "relative_mobile_no": profile.relative_mobile_no,
+            "relatives_mobile_numbers": profile.relatives_mobile_numbers or [],
+            "blood_group": profile.blood_group,
+            "height_cm": str(profile.height_cm) if profile.height_cm is not None else None,
+            "weight_kg": str(profile.weight_kg) if profile.weight_kg is not None else None,
+            "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+        },
+    }
 
 
 def _as_email_list(value):
@@ -397,3 +501,82 @@ def send_emergency_alert(request):
             "user": {"id": user.id, "username": user.username, "email": user.email},
         }
     )
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def me_profile(request):
+    """
+    Get / update the logged-in user's profile.
+
+    Auth:
+      Authorization: Bearer <token>   (token comes from /auth/verify-otp/)
+
+    Update (POST) supports:
+      - JSON body (application/json)
+      - multipart/form-data (for image upload)
+
+    Fields:
+      image (file)
+      relative_mobile_no (string)
+      relatives_mobile_numbers (list OR comma string OR JSON-string list)
+      blood_group (A+/A-/B+/B-/AB+/AB-/O+/O-)
+      height_cm (number)
+      weight_kg (number)
+    """
+    user, err = _auth_user_from_request(request)
+    if err:
+        return err
+
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+
+    if request.method == "GET":
+        return JsonResponse({"success": True, **_profile_to_dict(request, profile)}, status=200)
+
+    # POST => update
+    data = {}
+    content_type = (request.content_type or "").lower()
+    if "application/json" in content_type:
+        data, err2 = _json_body(request)
+        if err2:
+            return err2
+        data = data or {}
+        uploaded_image = None
+    else:
+        # multipart/form-data or x-www-form-urlencoded
+        data = request.POST.dict()
+        uploaded_image = request.FILES.get("image")
+        # If frontend sends multiple values, try to capture list as well
+        if "relatives_mobile_numbers" in request.POST and hasattr(request.POST, "getlist"):
+            lst = request.POST.getlist("relatives_mobile_numbers")
+            if len(lst) > 1:
+                data["relatives_mobile_numbers"] = lst
+
+    # update fields if present
+    if uploaded_image is not None:
+        profile.image = uploaded_image
+
+    if "relative_mobile_no" in data:
+        profile.relative_mobile_no = _clean_phone(str(data.get("relative_mobile_no")))
+
+    if "relatives_mobile_numbers" in data:
+        profile.relatives_mobile_numbers = _as_phone_list(data.get("relatives_mobile_numbers"))
+
+    if "blood_group" in data:
+        profile.blood_group = (data.get("blood_group") or "").strip().upper()
+
+    if "height_cm" in data:
+        raw = (data.get("height_cm") or "").strip()
+        profile.height_cm = None if raw == "" else raw
+
+    if "weight_kg" in data:
+        raw = (data.get("weight_kg") or "").strip()
+        profile.weight_kg = None if raw == "" else raw
+
+    try:
+        profile.full_clean()
+    except Exception as e:
+        return JsonResponse({"success": False, "message": "Validation error", "error": str(e)}, status=400)
+
+    profile.save()
+    return JsonResponse({"success": True, "message": "Profile updated", **_profile_to_dict(request, profile)}, status=200)
