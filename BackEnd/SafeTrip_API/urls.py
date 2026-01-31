@@ -6,4 +6,5 @@ urlpatterns = [
     path('auth/request-otp/', views.request_otp, name='request_otp'),
     path('auth/send-otp/', views.send_otp, name='send_otp'),
     path('auth/verify-otp/', views.verify_otp, name='verify_otp'),
+    path('emergency/alert/', views.send_emergency_alert, name='send_emergency_alert'),
 ]

@@ -148,6 +148,16 @@ if not EMAIL_HOST_PASSWORD:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
     print("\n⚠️ WARNING: No Email Password found. Emails will be printed to console.\n")
 
+# Recipients for emergency alert emails (comma-separated).
+# Example in .env:
+#   AUTHORITY_ALERT_EMAILS=police@example.com,ambulance@example.com
+_authority_raw = os.environ.get("AUTHORITY_ALERT_EMAILS", "")
+AUTHORITY_ALERT_EMAILS = [e.strip() for e in _authority_raw.split(",") if e.strip()]
+
+# Hackathon-friendly fallback: if none set, send to the configured sender address
+if not AUTHORITY_ALERT_EMAILS and EMAIL_HOST_USER:
+    AUTHORITY_ALERT_EMAILS = [EMAIL_HOST_USER]
+
 
 # -------------------------
 # OTP & CACHE SETTINGS
