@@ -46,7 +46,7 @@ export function AuthProvider({ children }) {
     const { user: u, profile: p } = await authService.login(username, password);
     setUser(u);
     setProfile(p || null);
-    
+
     // Request location permission after successful login
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
