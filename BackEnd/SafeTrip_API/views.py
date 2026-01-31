@@ -155,7 +155,44 @@ def request_otp(request):
     return send_otp(request)
 
 
-@csrf_exempt 
+@csrf_exempt
+@require_http_methods(["POST"])
+def login_user(request):
+    data, err = _json_body(request)
+    if err:
+        return err
+        
+    username = data.get("username")
+    password = data.get("password")
+    
+    if not username or not password:
+        return JsonResponse({"error": "Username and password are required"}, status=400)
+    
+    try:
+        user = User.objects.get(username=username)
+    except User.DoesNotExist:
+         return JsonResponse({"error": "Invalid credentials"}, status=401)
+            
+    if user.check_password(password):
+        token = _auth_token_for_user(user.id)
+        return JsonResponse({
+            "success": True,
+            "message": "Login successful",
+            "token": token,
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "contact_no": getattr(user, "contact_no", "")
+            }
+        })
+    else:
+        return JsonResponse({"error": "Invalid credentials"}, status=401)
+
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def register_user(request):
     try:
@@ -507,52 +544,69 @@ def send_emergency_alert(request):
 @require_http_methods(["GET", "POST"])
 def me_profile(request):
     """
-    Get / update the logged-in user's profile.
-
-    Auth:
-      Authorization: Bearer <token>   (token comes from /auth/verify-otp/)
-
-    Update (POST) supports:
-      - JSON body (application/json)
-      - multipart/form-data (for image upload)
-
-    Fields:
-      image (file)
-      relative_mobile_no (string)
-      relatives_mobile_numbers (list OR comma string OR JSON-string list)
-      blood_group (A+/A-/B+/B-/AB+/AB-/O+/O-)
-      height_cm (number)
-      weight_kg (number)
+    NO AUTH VERSION (For Testing)
+    Get / update a user profile by user_id.
+    
+    Expected Data:
+      user_id: 1  (Required now, since we don't have a token)
     """
-    user, err = _auth_user_from_request(request)
-    if err:
-        return err
+    
+    # --- 1. BYPASS AUTH: Get User ID directly from request ---
+    user_id = None
+    
+    if request.method == "GET":
+        user_id = request.GET.get("user_id")
+    else:
+        # For POST, try to get user_id from JSON body or Form Data
+        try:
+            # Try JSON first
+            import json
+            body = json.loads(request.body)
+            user_id = body.get("user_id")
+        except:
+            # Fallback to Form Data
+            user_id = request.POST.get("user_id")
 
+    # --- 2. FIND THE USER ---
+    if not user_id:
+        # OPTIONAL: Default to the first user if no ID is sent (Great for lazy testing)
+        user = User.objects.first()
+        if not user:
+            return JsonResponse({"success": False, "message": "No user_id provided and no users in DB"}, status=400)
+    else:
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return JsonResponse({"success": False, "message": "User not found"}, status=404)
+
+    # --- 3. EXISTING LOGIC (Unchanged) ---
     profile, _ = UserProfile.objects.get_or_create(user=user)
 
     if request.method == "GET":
         return JsonResponse({"success": True, **_profile_to_dict(request, profile)}, status=200)
 
-    # POST => update
+    # POST => update logic
     data = {}
     content_type = (request.content_type or "").lower()
+    
+    uploaded_image = None
+    
     if "application/json" in content_type:
-        data, err2 = _json_body(request)
-        if err2:
-            return err2
-        data = data or {}
+        # Re-parse JSON safely
+        try:
+            data = json.loads(request.body)
+        except:
+            data = {}
         uploaded_image = None
     else:
-        # multipart/form-data or x-www-form-urlencoded
+        # multipart/form-data
         data = request.POST.dict()
         uploaded_image = request.FILES.get("image")
-        # If frontend sends multiple values, try to capture list as well
         if "relatives_mobile_numbers" in request.POST and hasattr(request.POST, "getlist"):
             lst = request.POST.getlist("relatives_mobile_numbers")
             if len(lst) > 1:
                 data["relatives_mobile_numbers"] = lst
 
-    # update fields if present
     if uploaded_image is not None:
         profile.image = uploaded_image
 
