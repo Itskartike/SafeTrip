@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Python
 *.py[cod]
 *$py.class
@@ -74,3 +75,14 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+=======
+# --- DJANGO (Backend) ---
+backend/venv/
+backend/env/
+backend/*.sqlite3
+backend/__pycache__/
+backend/*.pyc
+*.log
+.env
+.DS_Store
+>>>>>>> ce374e89ee4e9db93db6852ae4b25f7256518993
