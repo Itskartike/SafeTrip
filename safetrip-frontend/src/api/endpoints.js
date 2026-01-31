@@ -10,7 +10,7 @@ const ENDPOINTS = {
   AUTH: {
     LOGIN: '/api/auth/login/',
     LOGOUT: '/api/auth/logout/',
-    REGISTER: '/api/auth/register/',
+    REGISTER: '/register/',
     REFRESH: '/api/auth/refresh/',
     USER: '/api/auth/user/',
   },

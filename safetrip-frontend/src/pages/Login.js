@@ -72,9 +72,9 @@ const Login = () => {
         <p className="login-footer">
           Don&apos;t have an account? <Link to="/signup">Sign up</Link>
         </p>
-        <p className="login-demo">
+        {/* <p className="login-demo">
           Demo: username <strong>demo</strong>, password <strong>demo123</strong>
-        </p>
+        </p> */}
       </div>
     </div>
   );
