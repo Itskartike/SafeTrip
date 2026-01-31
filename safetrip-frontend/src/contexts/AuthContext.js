@@ -1,5 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import authService from '../api/services/authService';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import authService from "../api/services/authService";
 
 const AuthContext = createContext(null);
 
@@ -32,7 +38,9 @@ export function AuthProvider({ children }) {
     if (!authService.isAuthenticated()) return;
     try {
       const data = await authService.getProfile();
-      setProfile(data);
+      // Backend returns {success, user, profile}
+      if (data.user) setUser(data.user);
+      if (data.profile) setProfile(data.profile);
     } catch (e) {
       console.error(e);
     }
@@ -47,31 +55,34 @@ export function AuthProvider({ children }) {
     setUser(u);
     setProfile(p || null);
 
-    // Request location permission after successful login
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          console.log('User location after login:', { latitude, longitude });
-        },
-        (error) => {
-          console.error('Location access denied or error:', error.message);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
-        }
-      );
-    } else {
-      console.error('Geolocation is not supported by this browser');
-    }
+    // Request location permission after successful login (non-blocking)
+    setTimeout(() => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            console.log("User location after login:", { latitude, longitude });
+          },
+          (error) => {
+            console.error("Location access denied or error:", error.message);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0,
+          }
+        );
+      } else {
+        console.error("Geolocation is not supported by this browser");
+      }
+    }, 100);
   };
 
   const register = async (data) => {
-    const { user: u, profile: p } = await authService.register(data);
-    setUser(u);
-    setProfile(p || null);
+    // Backend returns {message: "..."} on successful registration
+    // User needs to login with OTP after registration
+    const response = await authService.register(data);
+    return response;
   };
 
   const logout = () => {
@@ -81,9 +92,16 @@ export function AuthProvider({ children }) {
   };
 
   const updateProfile = async (data) => {
-    const updated = await authService.updateProfile(data);
-    setProfile(updated);
-    return updated;
+    const response = await authService.updateProfile(data);
+    // Backend returns {success, message, user, profile}
+    if (response.user) setUser(response.user);
+    if (response.profile) setProfile(response.profile);
+    return response;
+  };
+
+  const setAuthData = (userData, profileData) => {
+    setUser(userData);
+    setProfile(profileData);
   };
 
   const value = {
@@ -96,6 +114,7 @@ export function AuthProvider({ children }) {
     logout,
     updateProfile,
     refreshProfile,
+    setAuthData,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -103,6 +122,6 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }

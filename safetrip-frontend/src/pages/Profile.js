@@ -13,10 +13,11 @@ const Profile = () => {
   const { user, profile, updateProfile, isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState("personal");
   const [formData, setFormData] = useState({
-    full_name: "",
-    phone: "",
-    emergency_contact_name: "",
+    weight: "",
+    height: "",
+    blood_group: "",
     emergency_contact_phone: "",
+    emergency_email: "",
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -28,10 +29,11 @@ const Profile = () => {
   useEffect(() => {
     if (profile) {
       setFormData({
-        full_name: profile.full_name || "",
-        phone: profile.phone || "",
-        emergency_contact_name: profile.emergency_contact_name || "",
-        emergency_contact_phone: profile.emergency_contact_phone || "",
+        weight: profile.weight_kg || "",
+        height: profile.height_cm || "",
+        blood_group: profile.blood_group || "",
+        emergency_contact_phone: profile.relative_mobile_no || "",
+        emergency_email: profile.emergency_email || "",
       });
       if (profile.image) {
         const path = profile.image.startsWith("http")
@@ -62,10 +64,6 @@ const Profile = () => {
 
   const validate = () => {
     const newErrors = {};
-    const nameErr = validateName(formData.full_name);
-    if (nameErr) newErrors.full_name = nameErr;
-    const phoneErr = validatePhone(formData.phone);
-    if (phoneErr) newErrors.phone = phoneErr;
     if (formData.emergency_contact_phone) {
       const ecErr = validatePhone(formData.emergency_contact_phone);
       if (ecErr) newErrors.emergency_contact_phone = ecErr;
@@ -105,10 +103,11 @@ const Profile = () => {
   const handleCancel = () => {
     setEditMode(false);
     setFormData({
-      full_name: profile?.full_name || "",
-      phone: profile?.phone || "",
-      emergency_contact_name: profile?.emergency_contact_name || "",
-      emergency_contact_phone: profile?.emergency_contact_phone || "",
+      weight: profile?.weight_kg || "",
+      height: profile?.height_cm || "",
+      blood_group: profile?.blood_group || "",
+      emergency_contact_phone: profile?.relative_mobile_no || "",
+      emergency_email: profile?.emergency_email || "",
     });
     setErrors({});
   };
@@ -246,25 +245,45 @@ const Profile = () => {
 
                 {editMode ? (
                   <form onSubmit={handleSubmit} className="profile-form">
-                    <Input
-                      label="Full name"
-                      name="full_name"
-                      value={formData.full_name}
-                      onChange={handleChange}
-                      error={errors.full_name}
-                      placeholder="Your full name"
-                      required
-                    />
-                    <Input
-                      label="Phone number"
-                      name="phone"
-                      type="tel"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      error={errors.phone}
-                      placeholder="+91 9876543210"
-                      required
-                    />
+                    <div className="form-row">
+                      <Input
+                        label="Weight (kg)"
+                        name="weight"
+                        type="number"
+                        value={formData.weight}
+                        onChange={handleChange}
+                        error={errors.weight}
+                        placeholder="70"
+                      />
+                      <Input
+                        label="Height (cm)"
+                        name="height"
+                        type="number"
+                        value={formData.height}
+                        onChange={handleChange}
+                        error={errors.height}
+                        placeholder="170"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="input-label">Blood Group</label>
+                      <select
+                        name="blood_group"
+                        value={formData.blood_group}
+                        onChange={handleChange}
+                        className="input-field"
+                      >
+                        <option value="">Select blood group</option>
+                        <option value="A+">A+</option>
+                        <option value="A-">A-</option>
+                        <option value="B+">B+</option>
+                        <option value="B-">B-</option>
+                        <option value="AB+">AB+</option>
+                        <option value="AB-">AB-</option>
+                        <option value="O+">O+</option>
+                        <option value="O-">O-</option>
+                      </select>
+                    </div>
                     <div className="form-actions">
                       <Button
                         type="button"
@@ -281,15 +300,21 @@ const Profile = () => {
                 ) : (
                   <div className="info-grid">
                     <div className="info-item">
-                      <span className="info-label">Full Name</span>
+                      <span className="info-label">Weight</span>
                       <span className="info-value">
-                        {formData.full_name || "Not set"}
+                        {formData.weight ? `${formData.weight} kg` : "Not set"}
                       </span>
                     </div>
                     <div className="info-item">
-                      <span className="info-label">Phone Number</span>
+                      <span className="info-label">Height</span>
                       <span className="info-value">
-                        {formData.phone || "Not set"}
+                        {formData.height ? `${formData.height} cm` : "Not set"}
+                      </span>
+                    </div>
+                    <div className="info-item">
+                      <span className="info-label">Blood Group</span>
+                      <span className="info-value">
+                        {formData.blood_group || "Not set"}
                       </span>
                     </div>
                   </div>
@@ -311,13 +336,6 @@ const Profile = () => {
                 {editMode ? (
                   <form onSubmit={handleSubmit} className="profile-form">
                     <Input
-                      label="Emergency contact name"
-                      name="emergency_contact_name"
-                      value={formData.emergency_contact_name}
-                      onChange={handleChange}
-                      placeholder="Contact person name"
-                    />
-                    <Input
                       label="Emergency contact phone"
                       name="emergency_contact_phone"
                       type="tel"
@@ -325,6 +343,15 @@ const Profile = () => {
                       onChange={handleChange}
                       error={errors.emergency_contact_phone}
                       placeholder="+91 9123456789"
+                    />
+                    <Input
+                      label="Emergency contact email"
+                      name="emergency_email"
+                      type="email"
+                      value={formData.emergency_email}
+                      onChange={handleChange}
+                      error={errors.emergency_email}
+                      placeholder="emergency@example.com"
                     />
                     <div className="form-actions">
                       <Button
@@ -342,15 +369,15 @@ const Profile = () => {
                 ) : (
                   <div className="info-grid">
                     <div className="info-item">
-                      <span className="info-label">Contact Name</span>
-                      <span className="info-value">
-                        {formData.emergency_contact_name || "Not set"}
-                      </span>
-                    </div>
-                    <div className="info-item">
                       <span className="info-label">Contact Phone</span>
                       <span className="info-value">
                         {formData.emergency_contact_phone || "Not set"}
+                      </span>
+                    </div>
+                    <div className="info-item">
+                      <span className="info-label">Contact Email</span>
+                      <span className="info-value">
+                        {formData.emergency_email || "Not set"}
                       </span>
                     </div>
                   </div>

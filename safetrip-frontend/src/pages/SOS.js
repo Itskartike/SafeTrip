@@ -11,7 +11,7 @@ import "./SOS.css";
 
 const SOS = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, profile } = useAuth();
+  const { isAuthenticated, profile, user } = useAuth();
   const {
     location,
     error: geoError,
@@ -26,9 +26,14 @@ const SOS = () => {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [alertActive, setAlertActive] = useState(false);
 
-  const useProfile = isAuthenticated && profile?.full_name && profile?.phone;
-  const displayName = useProfile ? profile.full_name : formData.name;
-  const displayPhone = useProfile ? profile.phone : formData.phone;
+  const useProfile = isAuthenticated;
+  const displayName = useProfile
+    ? `${profile?.first_name || ""} ${profile?.last_name || ""}`.trim() ||
+      "User"
+    : formData.name;
+  const displayPhone = useProfile
+    ? profile?.emergency_contact_phone
+    : formData.phone;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -66,16 +71,22 @@ const SOS = () => {
 
   useEffect(() => {
     if (!location || !submitting) return;
-    const name = useProfile ? profile.full_name : formData.name;
-    const phone = useProfile ? profile.phone : formData.phone;
     const sendAlert = async () => {
       try {
-        await alertService.createAlert({
-          name,
-          phone,
+        const alertData = {
           latitude: location.latitude,
           longitude: location.longitude,
-        });
+        };
+
+        // Send user_id if authenticated, otherwise send name/phone
+        if (useProfile && user) {
+          alertData.user_id = user.id;
+        } else {
+          alertData.name = formData.name;
+          alertData.phone = formData.phone;
+        }
+
+        await alertService.createAlert(alertData);
         setSubmitSuccess(true);
         if (!useProfile) setFormData({ name: "", phone: "" });
         setTimeout(() => navigate("/dashboard"), 2000);

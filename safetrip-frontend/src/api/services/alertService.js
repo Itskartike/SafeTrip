@@ -1,11 +1,16 @@
-import api from '../axios';
-import ENDPOINTS from '../endpoints';
+import api from "../axios";
+import ENDPOINTS from "../endpoints";
 
 class AlertService {
   async getAllAlerts() {
     try {
       const response = await api.get(ENDPOINTS.ALERTS.LIST);
-      return response.data.data || response.data.results || response.data;
+      return (
+        response.data.alerts ||
+        response.data.data ||
+        response.data.results ||
+        response.data
+      );
     } catch (error) {
       throw this.handleError(error);
     }
@@ -39,11 +44,18 @@ class AlertService {
   async createAlert(alertData) {
     try {
       const payload = {
-        name: alertData.name,
-        phone: alertData.phone,
         latitude: alertData.latitude,
         longitude: alertData.longitude,
       };
+
+      // Add user_id if authenticated, otherwise name/phone
+      if (alertData.user_id) {
+        payload.user_id = alertData.user_id;
+      } else {
+        payload.name = alertData.name;
+        payload.phone = alertData.phone;
+      }
+
       const response = await api.post(ENDPOINTS.ALERTS.CREATE, payload);
       return response.data;
     } catch (error) {
@@ -53,7 +65,7 @@ class AlertService {
 
   async updateAlertStatus(id, status) {
     try {
-      const response = await api.patch(ENDPOINTS.ALERTS.UPDATE(id), {
+      const response = await api.post(ENDPOINTS.ALERTS.UPDATE_STATUS(id), {
         status,
       });
       return response.data;
@@ -119,17 +131,17 @@ class AlertService {
         Object.keys(data).forEach((key) => {
           errors[key] = Array.isArray(data[key]) ? data[key][0] : data[key];
         });
-        return { status, errors, message: 'Validation failed' };
+        return { status, errors, message: "Validation failed" };
       }
       return {
         status,
-        message: data.detail || data.message || 'An error occurred',
+        message: data.detail || data.message || "An error occurred",
         errors: data,
       };
     }
     return {
       status: 500,
-      message: error.message || 'Network error',
+      message: error.message || "Network error",
       errors: {},
     };
   }

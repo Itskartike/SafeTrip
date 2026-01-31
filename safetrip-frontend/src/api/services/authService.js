@@ -1,11 +1,16 @@
-import api from '../axios';
-import ENDPOINTS from '../endpoints';
+import api from "../axios";
+import ENDPOINTS from "../endpoints";
 
-const TOKEN_KEY = 'authToken';
+const TOKEN_KEY = "authToken";
 
 class AuthService {
   async login(username, password) {
-    const response = await api.post(ENDPOINTS.AUTH.LOGIN, { username, password });
+    console.log("Login attempt:", { username, endpoint: ENDPOINTS.AUTH.LOGIN });
+    const response = await api.post(ENDPOINTS.AUTH.LOGIN, {
+      username,
+      password,
+    });
+    console.log("Login response:", response.data);
     const { token, user, profile } = response.data;
     if (token) localStorage.setItem(TOKEN_KEY, token);
     return { token, user, profile };
@@ -15,13 +20,25 @@ class AuthService {
     const response = await api.post(ENDPOINTS.AUTH.REGISTER, {
       username: data.username,
       password: data.password,
-      email: data.email || '',
-      full_name: data.full_name || '',
-      phone: data.phone || '',
+      email: data.email || "",
+      first_name: data.first_name || "",
+      last_name: data.last_name || "",
+      contact_no: data.contact_no || "",
     });
-    const { token, user, profile } = response.data;
+    // Backend returns {message: "..."} on success, not token
+    return response.data;
+  }
+
+  async requestOTP(email) {
+    const response = await api.post(ENDPOINTS.AUTH.REQUEST_OTP, { email });
+    return response.data;
+  }
+
+  async verifyOTP(email, otp) {
+    const response = await api.post(ENDPOINTS.AUTH.VERIFY_OTP, { email, otp });
+    const { token, user } = response.data;
     if (token) localStorage.setItem(TOKEN_KEY, token);
-    return { token, user, profile };
+    return { token, user, profile: null };
   }
 
   async logout() {
@@ -35,7 +52,7 @@ class AuthService {
   }
 
   async getCurrentUser() {
-    const response = await api.get(ENDPOINTS.AUTH.USER);
+    const response = await api.get(ENDPOINTS.PROFILE);
     return response.data;
   }
 
@@ -46,12 +63,16 @@ class AuthService {
 
   async updateProfile(data) {
     const formData = new FormData();
-    if (data.full_name !== undefined) formData.append('full_name', data.full_name);
-    if (data.phone !== undefined) formData.append('phone', data.phone);
-    if (data.emergency_contact_name !== undefined) formData.append('emergency_contact_name', data.emergency_contact_name);
-    if (data.emergency_contact_phone !== undefined) formData.append('emergency_contact_phone', data.emergency_contact_phone);
-    if (data.image instanceof File) formData.append('image', data.image);
-    const response = await api.patch(ENDPOINTS.PROFILE, formData);
+    if (data.weight !== undefined) formData.append("weight_kg", data.weight);
+    if (data.height !== undefined) formData.append("height_cm", data.height);
+    if (data.blood_group !== undefined)
+      formData.append("blood_group", data.blood_group);
+    if (data.emergency_contact_phone !== undefined)
+      formData.append("relative_mobile_no", data.emergency_contact_phone);
+    if (data.emergency_email !== undefined)
+      formData.append("emergency_email", data.emergency_email);
+    if (data.image instanceof File) formData.append("image", data.image);
+    const response = await api.post(ENDPOINTS.PROFILE, formData);
     return response.data;
   }
 
