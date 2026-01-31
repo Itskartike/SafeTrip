@@ -51,7 +51,12 @@ const Login = () => {
         formData.otp
       );
       setAuthData(user, null);
-      navigate("/profile", { replace: true });
+      // Redirect by role: Authority -> dashboard, User -> home
+      if (user?.role === "AUTHORITY") {
+        navigate("/dashboard", { replace: true });
+      } else {
+        navigate("/", { replace: true });
+      }
     } catch (err) {
       const msg =
         err.response?.data?.message ||

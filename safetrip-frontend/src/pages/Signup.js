@@ -15,6 +15,7 @@ const Signup = () => {
     first_name: "Raj",
     last_name: "Jadhav",
     contact_no: "9876541210",
+    role: "USER",
   });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -121,6 +122,23 @@ const Signup = () => {
             placeholder="9876543210"
             required
           />
+          <div className="form-group">
+            <label htmlFor="role">Account Type</label>
+            <select
+              id="role"
+              name="role"
+              value={formData.role}
+              onChange={handleChange}
+              className="form-select"
+              required
+            >
+              <option value="USER">User (Send SOS Alerts)</option>
+              <option value="AUTHORITY">Authority (View Dashboard)</option>
+            </select>
+            <small className="form-hint">
+              Choose User if you want to send emergency alerts. Choose Authority if you're monitoring alerts.
+            </small>
+          </div>
           <Button type="submit" fullWidth loading={loading}>
             Sign up
           </Button>

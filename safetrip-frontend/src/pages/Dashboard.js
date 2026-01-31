@@ -19,9 +19,28 @@ const Dashboard = () => {
 
   const stats = getStats();
 
+  // Fetch alerts on mount
+  useEffect(() => {
+    fetchAlerts();
+  }, [fetchAlerts]);
+
+  // Auto-refresh every 30 seconds
   useEffect(() => {
     const interval = setInterval(() => fetchAlerts(), 30000);
     return () => clearInterval(interval);
+  }, [fetchAlerts]);
+
+  // Refresh when component becomes visible again
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchAlerts();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [fetchAlerts]);
 
   const handleStatusChange = async (id, newStatus) => {

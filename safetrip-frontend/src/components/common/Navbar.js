@@ -8,7 +8,7 @@ const NAVBAR_HEIGHT = 64;
 const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, isUser, isAuthority, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const isActive = (path) => location.pathname === path;
@@ -72,29 +72,44 @@ const Navbar = () => {
               Home
             </Link>
           </li>
-          <li>
-            <Link to="/sos" className={isActive('/sos') ? 'active' : ''}>
-              SOS
-            </Link>
-          </li>
-          <li>
-            <Link to="/dashboard" className={isActive('/dashboard') ? 'active' : ''}>
-              Dashboard
-            </Link>
-          </li>
-          <li>
-            <Link to="/safety-tips" className={isActive('/safety-tips') ? 'active' : ''}>
-              Safety Tips
-            </Link>
-          </li>
+          
+          {/* Show SOS for Users only */}
+          {(!isAuthenticated || isUser) && (
+            <li>
+              <Link to="/sos" className={isActive('/sos') ? 'active' : ''}>
+                SOS
+              </Link>
+            </li>
+          )}
+          
+          {/* Show Dashboard for Authorities only */}
+          {isAuthority && (
+            <li>
+              <Link to="/dashboard" className={isActive('/dashboard') ? 'active' : ''}>
+                Dashboard
+              </Link>
+            </li>
+          )}
+          
+          {/* Show Safety Tips for Users only */}
+          {(!isAuthenticated || isUser) && (
+            <li>
+              <Link to="/safety-tips" className={isActive('/safety-tips') ? 'active' : ''}>
+                Safety Tips
+              </Link>
+            </li>
+          )}
 
           {isAuthenticated ? (
             <>
-              <li>
-                <Link to="/profile" className={isActive('/profile') ? 'active' : ''}>
-                  Profile
-                </Link>
-              </li>
+              {/* Profile only for Users */}
+              {isUser && (
+                <li>
+                  <Link to="/profile" className={isActive('/profile') ? 'active' : ''}>
+                    Profile
+                  </Link>
+                </li>
+              )}
               <li>
                 <button className="navbar-logout" onClick={handleLogout}>
                   Logout

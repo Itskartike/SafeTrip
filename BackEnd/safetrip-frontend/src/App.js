@@ -12,6 +12,7 @@ import Signup from './pages/Signup';
 import Profile from './pages/Profile';
 import NotFound from './pages/NotFound';
 import PrivateRoute from './components/routing/PrivateRoute';
+import AuthorityRoute from './components/routing/AuthorityRoute';
 import './styles/global.css';
 
 function App() {
@@ -35,7 +36,14 @@ function App() {
                   </PrivateRoute>
                 }
               />
-              <Route path="/dashboard" element={<Dashboard />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <AuthorityRoute>
+                    <Dashboard />
+                  </AuthorityRoute>
+                }
+              />
               <Route path="/404" element={<NotFound />} />
               <Route path="*" element={<Navigate to="/404" replace />} />
             </Routes>

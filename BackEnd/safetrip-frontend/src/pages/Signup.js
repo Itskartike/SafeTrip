@@ -9,12 +9,13 @@ const Signup = () => {
   const navigate = useNavigate();
   const { register } = useAuth();
   const [formData, setFormData] = useState({
-    username: "hukum1",
-    password: "TestPassword@123",
-    email: "jadhavrj0011@gmail.com",
-    first_name: "Raj",
-    last_name: "Jadhav",
-    contact_no: "9876541210",
+    username: "",
+    password: "",
+    email: "",
+    first_name: "",
+    last_name: "",
+    contact_no: "",
+    role: "USER",
   });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -121,6 +122,20 @@ const Signup = () => {
             placeholder="9876543210"
             required
           />
+          <div className="form-group">
+            <label className="input-label">Account type</label>
+            <select
+              name="role"
+              value={formData.role}
+              onChange={handleChange}
+              className="input-field"
+              required
+            >
+              <option value="USER">User (send SOS, manage profile)</option>
+              <option value="AUTHORITY">Authority (view & manage alerts)</option>
+            </select>
+            <p className="input-hint">Authority accounts can access the alerts dashboard.</p>
+          </div>
           <Button type="submit" fullWidth loading={loading}>
             Sign up
           </Button>

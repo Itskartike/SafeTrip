@@ -8,8 +8,9 @@ const NAVBAR_HEIGHT = 64;
 const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const isAuthority = user?.role === 'AUTHORITY';
 
   const isActive = (path) => location.pathname === path;
 
@@ -77,11 +78,13 @@ const Navbar = () => {
               SOS
             </Link>
           </li>
-          <li>
-            <Link to="/dashboard" className={isActive('/dashboard') ? 'active' : ''}>
-              Dashboard
-            </Link>
-          </li>
+          {isAuthority && (
+            <li>
+              <Link to="/dashboard" className={isActive('/dashboard') ? 'active' : ''}>
+                Dashboard
+              </Link>
+            </li>
+          )}
           <li>
             <Link to="/safety-tips" className={isActive('/safety-tips') ? 'active' : ''}>
               Safety Tips
@@ -90,11 +93,13 @@ const Navbar = () => {
 
           {isAuthenticated ? (
             <>
-              <li>
-                <Link to="/profile" className={isActive('/profile') ? 'active' : ''}>
-                  Profile
-                </Link>
-              </li>
+              {!isAuthority && (
+                <li>
+                  <Link to="/profile" className={isActive('/profile') ? 'active' : ''}>
+                    Profile
+                  </Link>
+                </li>
+              )}
               <li>
                 <button className="navbar-logout" onClick={handleLogout}>
                   Logout

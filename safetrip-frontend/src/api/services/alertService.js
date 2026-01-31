@@ -46,11 +46,17 @@ class AlertService {
       const payload = {
         latitude: alertData.latitude,
         longitude: alertData.longitude,
+        message: alertData.message || "Emergency SOS Alert - Immediate assistance needed",
+        address: alertData.address || "",
       };
 
       // Add user_id if authenticated, otherwise name/phone
       if (alertData.user_id) {
         payload.user_id = alertData.user_id;
+        // Send emergency contact phone so backend can send SMS (even if profile was empty)
+        if (alertData.emergency_contact_phone) {
+          payload.emergency_contact_phone = alertData.emergency_contact_phone;
+        }
       } else {
         payload.name = alertData.name;
         payload.phone = alertData.phone;

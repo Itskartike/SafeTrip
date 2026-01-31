@@ -133,6 +133,15 @@ AUTH_USER_MODEL = 'SafeTrip_API.customUser'
 # CORS SETTINGS (Connect to React)
 # -------------------------
 CORS_ALLOW_ALL_ORIGINS = True  # Allows any frontend to connect (Good for Hackathon)
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "origin",
+    "user-agent",
+    "x-requested-with",
+]
 
 
 # -------------------------
@@ -161,6 +170,14 @@ AUTHORITY_ALERT_EMAILS = [e.strip() for e in _authority_raw.split(",") if e.stri
 # Hackathon-friendly fallback: if none set, send to the configured sender address
 if not AUTHORITY_ALERT_EMAILS and EMAIL_HOST_USER:
     AUTHORITY_ALERT_EMAILS = [EMAIL_HOST_USER]
+
+
+# -------------------------
+# TWILIO CONFIGURATION (SMS Alerts)
+# -------------------------
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE_NUMBER = os.environ.get("TWILIO_PHONE_NUMBER")
 
 
 # -------------------------

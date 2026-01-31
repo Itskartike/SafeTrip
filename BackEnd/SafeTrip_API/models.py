@@ -6,8 +6,14 @@ from django.dispatch import receiver
 
 
 class customUser(AbstractUser):
+    ROLE_CHOICES = [
+        ('USER', 'User'),
+        ('AUTHORITY', 'Authority'),
+    ]
+    
     contact_no = models.CharField(max_length=15, null=True, blank=True)
     is_admin = models.BooleanField(default=False)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='USER')
 
     def __str__(self):
         return self.username

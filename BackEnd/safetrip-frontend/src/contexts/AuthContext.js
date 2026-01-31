@@ -8,6 +8,23 @@ import React, {
 import authService from "../api/services/authService";
 
 const AuthContext = createContext(null);
+const USER_STORAGE_KEY = "safetrip_user";
+
+function getStoredUser() {
+  try {
+    const raw = localStorage.getItem(USER_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setStoredUser(user) {
+  try {
+    if (user) localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+    else localStorage.removeItem(USER_STORAGE_KEY);
+  } catch (_) {}
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -18,17 +35,27 @@ export function AuthProvider({ children }) {
     if (!authService.isAuthenticated()) {
       setUser(null);
       setProfile(null);
+      setStoredUser(null);
       setLoading(false);
       return;
     }
+    const cached = getStoredUser();
+    if (cached) {
+      setUser(cached);
+    }
     try {
       const data = await authService.getCurrentUser();
-      setUser(data.user);
-      setProfile(data.profile || null);
+      const u = data.user;
+      if (u && u.id && (!cached || cached.id === u.id)) {
+        setUser(u);
+        setStoredUser(u);
+        setProfile(data.profile || null);
+      }
     } catch (e) {
       authService.logout();
       setUser(null);
       setProfile(null);
+      setStoredUser(null);
     } finally {
       setLoading(false);
     }
@@ -89,6 +116,7 @@ export function AuthProvider({ children }) {
     authService.logout();
     setUser(null);
     setProfile(null);
+    setStoredUser(null);
   };
 
   const updateProfile = async (data) => {
@@ -102,6 +130,7 @@ export function AuthProvider({ children }) {
   const setAuthData = (userData, profileData) => {
     setUser(userData);
     setProfile(profileData);
+    setStoredUser(userData || null);
   };
 
   const value = {

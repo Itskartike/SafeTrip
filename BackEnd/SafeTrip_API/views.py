@@ -11,6 +11,7 @@ import secrets
 from django.utils import timezone
 from django.utils.html import format_html
 from datetime import timedelta
+from twilio.rest import Client
 
 from .models import OTPStorage, UserProfile
 User = get_user_model()
@@ -28,6 +29,40 @@ def _normalize_email(email: str) -> str:
     return (email or "").strip().lower()
 
 
+def _format_phone_e164(phone: str, default_country_code: str = "91") -> str:
+    """
+    Format phone number to E.164 format.
+    If no + prefix, assumes Indian number and adds +91
+    """
+    if not phone:
+        return ""
+    
+    # Remove spaces, dashes, parentheses
+    phone = ''.join(filter(str.isdigit, str(phone).strip()))
+    
+    if not phone:
+        return ""
+    
+    # If already has + and digits after, return as is
+    if str(phone).startswith('+'):
+        return phone
+    
+    # If 10 digits, assume Indian number
+    if len(phone) == 10:
+        return f"+{default_country_code}{phone}"
+    
+    # If 12 digits starting with country code (e.g., 918104121512)
+    if len(phone) == 12 and phone.startswith(default_country_code):
+        return f"+{phone}"
+    
+    # If 11-15 digits, assume it has country code
+    if 11 <= len(phone) <= 15:
+        return f"+{phone}"
+    
+    # Return with + prefix
+    return f"+{phone}" if phone else ""
+
+
 def _auth_token_for_user(user_id: int) -> str:
     # Lightweight signed token (not JWT). You can validate later with TimestampSigner.unsign(...).
     signer = TimestampSigner(salt="safetrip-email-otp")
@@ -35,12 +70,16 @@ def _auth_token_for_user(user_id: int) -> str:
 
 
 def _get_bearer_token(request):
-    auth = (request.headers.get("Authorization") or request.META.get("HTTP_AUTHORIZATION") or "").strip()
+    auth = request.META.get("HTTP_AUTHORIZATION") or ""
+    if not auth and getattr(request, "headers", None):
+        auth = request.headers.get("Authorization") or ""
+    if isinstance(auth, bytes):
+        auth = auth.decode("utf-8", errors="replace")
+    auth = (auth or "").strip()
     if not auth:
         return ""
     parts = auth.split()
     if len(parts) == 1:
-        # Allow passing raw token (not recommended but convenient)
         return parts[0]
     if len(parts) >= 2 and parts[0].lower() in ("bearer", "token"):
         return parts[1]
@@ -125,6 +164,7 @@ def _profile_to_dict(request, profile: UserProfile):
             "contact_no": getattr(profile.user, "contact_no", "") or "",
             "first_name": profile.user.first_name or "",
             "last_name": profile.user.last_name or "",
+            "role": getattr(profile.user, "role", "USER"),
         },
         "profile": {
             "image_url": image_url,
@@ -186,7 +226,8 @@ def login_user(request):
                 "email": user.email,
                 "first_name": user.first_name,
                 "last_name": user.last_name,
-                "contact_no": getattr(user, "contact_no", "")
+                "contact_no": getattr(user, "contact_no", ""),
+                "role": getattr(user, 'role', 'USER'),
             }
         })
     else:
@@ -208,10 +249,15 @@ def register_user(request):
         contact_no = data.get("contact_no","")
         is_staff = data.get("is_staff","False")
         is_admin = data.get("is_admin","False")
+        role = data.get("role", "USER")  # Default to USER role
 
 
         if not username or not password or not email:
             return JsonResponse({"error": "Username, email, and password are required"}, status=400)
+        
+        # Validate role
+        if role not in ['USER', 'AUTHORITY']:
+            return JsonResponse({"error": "Invalid role. Must be USER or AUTHORITY"}, status=400)
         
         users_qs = User.objects.all()
 
@@ -243,10 +289,14 @@ def register_user(request):
             last_name=last_name,
             contact_no = contact_no,
             is_staff=is_staff,
-            is_admin = is_admin
+            is_admin = is_admin,
+            role=role
         )
 
-        return JsonResponse({"message": f"The user '{user.username}' has successfully registered"})
+        return JsonResponse({
+            "message": f"The user '{user.username}' has successfully registered",
+            "role": user.role
+        })
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -414,7 +464,15 @@ def verify_otp(request):
             "success": True,
             "message": "OTP verified successfully",
             "token": token,
-            "user": {"id": user.id, "username": user.username, "email": user.email},
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "first_name": user.first_name or "",
+                "last_name": user.last_name or "",
+                "contact_no": getattr(user, "contact_no", "") or "",
+                "role": getattr(user, "role", "USER"),
+            },
         },
         status=200,
     )
@@ -434,6 +492,8 @@ def send_emergency_alert(request):
         "latitude": 18.5204,        # optional but recommended
         "longitude": 73.8567,       # optional but recommended
         "address": "Pune, India",   # optional
+        "phone": "+919876543210",   # optional; SMS is sent to this number (and profile contacts)
+        "emergency_contact_phone": "+919876543210",  # optional, same as phone
         "extra_recipients": ["friend@mail.com"]  # optional, adds to authority list
       }
     """
@@ -448,6 +508,8 @@ def send_emergency_alert(request):
     longitude = data.get("longitude")
     address = (data.get("address") or "").strip()
     extra_recipients = _as_email_list(data.get("extra_recipients"))
+    # Phone number(s) from request - used for SMS when profile has none or as additional recipient
+    request_phones = _as_phone_list(data.get("phone") or data.get("emergency_contact_phone"))
 
     user = None
     if user_id:
@@ -561,6 +623,160 @@ def send_emergency_alert(request):
     email_message.content_subtype = "html"
     email_message.send(fail_silently=False)
 
+    # Send SMS using Twilio
+    sms_sent = False
+    sms_recipients = []
+    sms_error = None
+    sms_debug_info = {}
+    
+    print("\n" + "="*60)
+    print("🚨 EMERGENCY ALERT - SMS SENDING STARTED")
+    print("="*60)
+    
+    try:
+        twilio_sid = getattr(settings, "TWILIO_ACCOUNT_SID", None)
+        twilio_token = getattr(settings, "TWILIO_AUTH_TOKEN", None)
+        twilio_phone = getattr(settings, "TWILIO_PHONE_NUMBER", None)
+        
+        print(f"📋 Twilio Config Check:")
+        print(f"   SID: {'✓' if twilio_sid else '✗'} {twilio_sid[:10] if twilio_sid else 'None'}...")
+        print(f"   Token: {'✓' if twilio_token else '✗'} {'*' * 10 if twilio_token else 'None'}")
+        print(f"   Phone: {'✓' if twilio_phone else '✗'} {twilio_phone}")
+        
+        sms_debug_info["twilio_configured"] = bool(twilio_sid and twilio_token and twilio_phone)
+        sms_debug_info["twilio_phone"] = twilio_phone
+        
+        if twilio_sid and twilio_token and twilio_phone:
+            client = Client(twilio_sid, twilio_token)
+            
+            # Prepare SMS message - keep under 160 chars for Twilio Trial (error 30044 = Trial Message Length Exceeded)
+            sms_max_len = 160
+            short_name = (full_name[:24] + "..") if len(full_name) > 26 else full_name
+            if maps_link:
+                sms_body = f"SafeTrip EMERGENCY: {short_name} needs help! {maps_link}"
+            else:
+                loc = (address or (f"{latitude},{longitude}" if latitude is not None and longitude is not None else "?"))[:50]
+                sms_body = f"SafeTrip EMERGENCY: {short_name} needs help! Loc: {loc}"
+            if len(sms_body) > sms_max_len:
+                sms_body = sms_body[: sms_max_len - 3] + "..."
+            
+            # Collect phone numbers to send SMS
+            phone_numbers = []
+            skipped_numbers = []
+            
+            # Add emergency contact from profile (format to E.164)
+            if profile and profile.relative_mobile_no:
+                formatted = _format_phone_e164(profile.relative_mobile_no)
+                if formatted:
+                    phone_numbers.append(formatted)
+            
+            # Add additional relative numbers if any (format to E.164)
+            if profile and profile.relatives_mobile_numbers:
+                for num in profile.relatives_mobile_numbers:
+                    if num and num.strip():
+                        formatted = _format_phone_e164(num.strip())
+                        if formatted:
+                            phone_numbers.append(formatted)
+            
+            # Add phone number(s) from the request (frontend sends emergency contact so SMS is sent even if profile was empty)
+            for req_phone in request_phones:
+                formatted = _format_phone_e164(req_phone)
+                if formatted and formatted not in phone_numbers:
+                    phone_numbers.append(formatted)
+            
+            sms_debug_info["phone_numbers_found"] = phone_numbers
+            sms_debug_info["request_phones"] = request_phones
+            sms_debug_info["profile_exists"] = profile is not None
+            if profile:
+                sms_debug_info["relative_mobile_no"] = profile.relative_mobile_no
+                sms_debug_info["relatives_mobile_numbers"] = profile.relatives_mobile_numbers
+            
+            print(f"\n📞 Phone Numbers Found: {phone_numbers}")
+            print(f"👤 Profile exists: {profile is not None}")
+            
+            # Send SMS to all phone numbers
+            sms_errors = []
+            message_sids = []  # track SIDs to check delivery status
+            for phone in phone_numbers:
+                try:
+                    # Ensure phone number is in E.164 format
+                    if not phone.startswith('+'):
+                        skipped_numbers.append(f"{phone} (missing + prefix)")
+                        continue
+                    
+                    message_obj = client.messages.create(
+                        body=sms_body,
+                        from_=twilio_phone,
+                        to=phone
+                    )
+                    sms_recipients.append(phone)
+                    message_sids.append((phone, message_obj.sid))
+                    sms_sent = True
+                    print(f"✅ SMS accepted by Twilio to {phone}: SID={message_obj.sid} (status={message_obj.status})")
+                except Exception as e:
+                    error_msg = f"{phone}: {str(e)}"
+                    sms_errors.append(error_msg)
+                    print(f"❌ Failed to send SMS to {error_msg}")
+                    continue
+            
+            # Check delivery status after a short delay (Twilio updates status asynchronously)
+            if message_sids:
+                import time
+                time.sleep(2)
+                for phone, sid in message_sids:
+                    try:
+                        msg = client.messages(sid).fetch()
+                        status = getattr(msg, "status", "unknown")
+                        err_code = getattr(msg, "error_code", None)
+                        err_msg = getattr(msg, "error_message", None)
+                        print(f"   📱 Delivery status for {phone}: {status}" + (f" (error {err_code}: {err_msg})" if err_code else ""))
+                        if status in ("failed", "undelivered") and err_code:
+                            sms_debug_info[f"twilio_error_{phone}"] = f"{status} - {err_code}: {err_msg}"
+                    except Exception as e:
+                        print(f"   ⚠ Could not fetch status for {sid}: {e}")
+            
+            # Hint when SMS not received (common: trial account, India DLT/DNC, unverified number)
+            if sms_sent and any(p.startswith("+91") for p in sms_recipients):
+                print("\n📌 If SMS was not received (India +91):")
+                print("   1. Trial: Add +91 as Verified Caller ID: https://console.twilio.com/us1/develop/phone-numbers/manage/verified")
+                print("   2. Check status: https://console.twilio.com/us1/monitor/logs/sms (30044=message too long, 30004=blocked)")
+            
+            sms_debug_info["skipped_numbers"] = skipped_numbers
+            sms_debug_info["sms_errors"] = sms_errors
+            
+            if not phone_numbers:
+                sms_error = "No phone numbers found in user profile"
+            elif skipped_numbers and not sms_sent:
+                sms_error = f"All phone numbers skipped (must start with +): {skipped_numbers}"
+            elif sms_errors and not sms_sent:
+                sms_error = f"Failed to send to all numbers: {'; '.join(sms_errors)}"
+        else:
+            missing = []
+            if not twilio_sid:
+                missing.append("TWILIO_ACCOUNT_SID")
+            if not twilio_token:
+                missing.append("TWILIO_AUTH_TOKEN")
+            if not twilio_phone:
+                missing.append("TWILIO_PHONE_NUMBER")
+            sms_error = f"Twilio credentials not configured. Missing: {', '.join(missing)}"
+    except Exception as e:
+        sms_error = f"SMS sending failed: {str(e)}"
+        print(f"🚨 Twilio SMS Error: {str(e)}")
+        import traceback
+        print("🔍 Full traceback:")
+        traceback.print_exc()
+        sms_debug_info["exception_trace"] = traceback.format_exc()
+    
+    # Ensure all SMS variables are initialized
+    if 'sms_debug_info' not in locals():
+        sms_debug_info = {"error": "SMS variables not initialized"}
+    
+    print(f"\n📊 SMS FINAL RESULT:")
+    print(f"   SMS Sent: {sms_sent}")
+    print(f"   SMS Recipients: {sms_recipients}")
+    print(f"   SMS Error: {sms_error}")
+    print("=" * 60 + "\n")
+
     # Save alert to database
     from .models import EmergencyAlert
     alert = EmergencyAlert.objects.create(
@@ -583,8 +799,13 @@ def send_emergency_alert(request):
     return JsonResponse(
         {
             "success": True,
-            "message": "Emergency alert email sent",
-            "recipients": recipients,
+            "message": "Emergency alert sent successfully",
+            "email_sent": True,
+            "email_recipients": recipients,
+            "sms_sent": sms_sent,
+            "sms_recipients": sms_recipients,
+            "sms_error": sms_error,
+            "sms_debug": sms_debug_info,
             "alert_id": alert.id,
             "user": {"id": user.id, "username": user.username, "email": user.email},
         }
@@ -592,37 +813,53 @@ def send_emergency_alert(request):
 
 
 @csrf_exempt
+@require_http_methods(["GET"])
+def current_user_from_token(request):
+    """
+    Return the current user and profile from the Authorization token only.
+    No fallback - use this for "who am I" so refresh shows the correct panel (USER vs AUTHORITY).
+    """
+    user, err = _auth_user_from_request(request)
+    if err:
+        return err
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+    return JsonResponse({"success": True, **_profile_to_dict(request, profile)}, status=200)
+
+
+@csrf_exempt
 @require_http_methods(["GET", "POST"])
 def me_profile(request):
     """
-    NO AUTH VERSION (For Testing)
-    Get / update a user profile by user_id.
+    Get / update the current user's profile.
+    When Authorization token is present, use the token to identify the user (correct role/panel).
+    Without token (e.g. testing), fall back to user_id from query/body or first user.
     """
-    # --- 1. GET user_id ---
-    user_id = None
-    if request.method == "GET":
-        user_id = request.GET.get("user_id")
-    else:
-        # Try getting user_id from JSON or Form Data
-        try:
-            body_data = json.loads(request.body)
-            user_id = body_data.get("user_id")
-        except:
-            user_id = request.POST.get("user_id")
+    user = None
+    if _get_bearer_token(request):
+        user, err = _auth_user_from_request(request)
+        if err:
+            return err
+    if not user:
+        user_id = None
+        if request.method == "GET":
+            user_id = request.GET.get("user_id")
+        else:
+            try:
+                body_data = json.loads(request.body or "{}")
+                user_id = body_data.get("user_id")
+            except Exception:
+                user_id = request.POST.get("user_id") if request.POST else None
+        if not user_id:
+            user = User.objects.first()
+            if not user:
+                return JsonResponse({"success": False, "message": "No user_id provided"}, status=400)
+        else:
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return JsonResponse({"success": False, "message": "User not found"}, status=404)
 
-    # --- 2. FIND USER ---
-    if not user_id:
-        # Default to first user if missing (for easy testing)
-        user = User.objects.first()
-        if not user:
-            return JsonResponse({"success": False, "message": "No user_id provided"}, status=400)
-    else:
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return JsonResponse({"success": False, "message": "User not found"}, status=404)
-
-    # --- 3. GET/CREATE PROFILE ---
+    # --- GET/CREATE PROFILE ---
     profile, _ = UserProfile.objects.get_or_create(user=user)
 
     if request.method == "GET":

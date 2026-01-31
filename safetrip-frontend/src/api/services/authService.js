@@ -24,6 +24,7 @@ class AuthService {
       first_name: data.first_name || "",
       last_name: data.last_name || "",
       contact_no: data.contact_no || "",
+      role: data.role || "USER",
     });
     // Backend returns {message: "..."} on success, not token
     return response.data;

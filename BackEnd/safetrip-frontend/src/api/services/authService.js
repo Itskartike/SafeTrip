@@ -24,6 +24,7 @@ class AuthService {
       first_name: data.first_name || "",
       last_name: data.last_name || "",
       contact_no: data.contact_no || "",
+      role: data.role || "USER",
     });
     // Backend returns {message: "..."} on success, not token
     return response.data;
@@ -52,7 +53,7 @@ class AuthService {
   }
 
   async getCurrentUser() {
-    const response = await api.get(ENDPOINTS.PROFILE);
+    const response = await api.get(ENDPOINTS.AUTH.ME);
     return response.data;
   }
 

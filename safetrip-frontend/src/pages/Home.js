@@ -1,6 +1,6 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import './Home.css';
+import React from "react";
+import { Link } from "react-router-dom";
+import "./Home.css";
 
 const Home = () => (
   <div className="home-page">
@@ -9,15 +9,13 @@ const Home = () => (
         <h1 className="hero-title">SafeTrip</h1>
         <p className="hero-tagline">Travel safer. Stay connected.</p>
         <p className="hero-desc">
-          Send emergency alerts with your location instantly. Get help when you need it most.
+          Send emergency alerts with your location instantly. Get help when you
+          need it most.
         </p>
         <div className="hero-actions">
           <Link to="/sos" className="btn-hero btn-sos">
-            <span className="btn-hero-icon">🆘</span>
-            SOS Alert
-          </Link>
-          <Link to="/dashboard" className="btn-hero btn-dashboard">
-            Dashboard
+            <span className="sos-text">SOS</span>
+            <span className="sos-subtitle">Emergency Alert</span>
           </Link>
         </div>
       </div>
@@ -26,17 +24,28 @@ const Home = () => (
       <h2 className="features-heading">Features</h2>
       <div className="features-grid">
         <div className="feature-card">
-          <span className="feature-icon" aria-hidden>📍</span>
+          <span className="feature-icon" aria-hidden>
+            📍
+          </span>
           <h3>Location sharing</h3>
-          <p>Share your precise GPS location with emergency contacts in one tap.</p>
+          <p>
+            Share your precise GPS location with emergency contacts in one tap.
+          </p>
         </div>
         <div className="feature-card">
-          <span className="feature-icon" aria-hidden>⚡</span>
+          <span className="feature-icon" aria-hidden>
+            ⚡
+          </span>
           <h3>Instant alerts</h3>
-          <p>Send SOS alerts that notify responders with your name, phone, and coordinates.</p>
+          <p>
+            Send SOS alerts that notify responders with your name, phone, and
+            coordinates.
+          </p>
         </div>
         <div className="feature-card">
-          <span className="feature-icon" aria-hidden>📋</span>
+          <span className="feature-icon" aria-hidden>
+            📋
+          </span>
           <h3>Dashboard</h3>
           <p>View and manage all alerts, update status, and track responses.</p>
         </div>

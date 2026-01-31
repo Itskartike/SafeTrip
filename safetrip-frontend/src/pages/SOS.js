@@ -28,11 +28,12 @@ const SOS = () => {
 
   const useProfile = isAuthenticated;
   const displayName = useProfile
-    ? `${profile?.first_name || ""} ${profile?.last_name || ""}`.trim() ||
+    ? `${user?.first_name || ""} ${user?.last_name || ""}`.trim() ||
+      user?.username ||
       "User"
     : formData.name;
   const displayPhone = useProfile
-    ? profile?.emergency_contact_phone
+    ? (profile?.relative_mobile_no || profile?.emergency_contact_phone)
     : formData.phone;
 
   const handleChange = (e) => {
@@ -76,11 +77,18 @@ const SOS = () => {
         const alertData = {
           latitude: location.latitude,
           longitude: location.longitude,
+          message: "Emergency SOS Alert - Immediate assistance needed!",
+          address: location.address || `${location.latitude}, ${location.longitude}`,
         };
 
         // Send user_id if authenticated, otherwise send name/phone
         if (useProfile && user) {
           alertData.user_id = user.id;
+          // Send emergency contact phone so backend sends SMS (profile uses relative_mobile_no)
+          const emergencyPhone = profile?.relative_mobile_no || profile?.emergency_contact_phone;
+          if (emergencyPhone) {
+            alertData.emergency_contact_phone = emergencyPhone;
+          }
         } else {
           alertData.name = formData.name;
           alertData.phone = formData.phone;
@@ -152,12 +160,11 @@ const SOS = () => {
 
         {useProfile && (
           <div className="sos-profile-notice">
-            Sending as <strong>{profile.full_name}</strong> — {profile.phone}
-            {profile.emergency_contact_name && (
+            Sending as <strong>{displayName}</strong> — {user?.contact_no || user?.email}
+            {(profile?.relative_mobile_no || profile?.emergency_contact_phone) && (
               <span className="sos-emergency-notice">
                 {" "}
-                • Emergency contact: {profile.emergency_contact_name} (
-                {profile.emergency_contact_phone})
+                • Emergency contact will be notified: {displayPhone}
               </span>
             )}
           </div>
