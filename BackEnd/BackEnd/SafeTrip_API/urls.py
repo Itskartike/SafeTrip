@@ -8,7 +8,5 @@ urlpatterns = [
     path('auth/send-otp/', views.send_otp, name='send_otp'),
     path('auth/verify-otp/', views.verify_otp, name='verify_otp'),
     path('emergency/alert/', views.send_emergency_alert, name='send_emergency_alert'),
-    path('emergency/alerts/', views.list_emergency_alerts, name='list_emergency_alerts'),
-    path('emergency/alerts/<int:alert_id>/status/', views.update_alert_status, name='update_alert_status'),
     path('profile/me/', views.me_profile, name='me_profile'),
 ]

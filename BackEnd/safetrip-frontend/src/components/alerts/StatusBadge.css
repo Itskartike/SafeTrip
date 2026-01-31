@@ -1,0 +1,30 @@
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.status-icon {
+  font-size: 0.875rem;
+}
+
+.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-in-progress {
+  background: var(--color-primary-light);
+  color: var(--color-primary-hover);
+}
+
+.status-resolved {
+  background: var(--color-success-light);
+  color: #065f46;
+}

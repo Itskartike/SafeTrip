@@ -1,0 +1,142 @@
+/* ===== NAVBAR ===== */
+
+.navbar {
+  position: sticky;
+  top: 0;
+  height: 64px;
+  z-index: 100;
+  background: #0b1c2d;
+  color: white;
+}
+
+.navbar-container {
+  height: 100%;
+  max-width: 1200px;
+  margin: auto;
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ===== BRAND ===== */
+
+.navbar-brand {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: white;
+  text-decoration: none;
+}
+
+/* ===== TOGGLE ===== */
+
+.navbar-toggle {
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: none;
+  display: none;
+  /* hidden by default (desktop) */
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.navbar-toggle-bar {
+  width: 22px;
+  height: 2px;
+  background: white;
+}
+
+/* ===== MENU (DESKTOP) ===== */
+
+.navbar-links {
+  list-style: none;
+  display: flex;
+  gap: 1rem;
+}
+
+/* ===== LINKS ===== */
+
+.navbar-links a,
+.navbar-logout {
+  color: #d1d5db;
+  text-decoration: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+.navbar-links a.active,
+.navbar-links a:hover,
+.navbar-logout:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+}
+
+.navbar-logout {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* ======================
+   MOBILE VIEW
+====================== */
+
+@media (max-width: 640px) {
+  .navbar-toggle {
+    display: flex;
+  }
+
+  /* Hide horizontal menu on mobile */
+  .navbar-links {
+    position: fixed;
+    top: 64px;
+    right: 0;
+    height: calc(100vh - 64px);
+    width: clamp(240px, 80vw, 300px);
+    background: #0b1c2d;
+    flex-direction: column;
+    padding: 0.75rem 0;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    z-index: 110;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .navbar-links-open {
+    transform: translateX(0);
+  }
+
+  .navbar-links li {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .navbar-links a,
+  .navbar-logout {
+    padding: 1rem 1.25rem;
+  }
+}
+
+/* ======================
+   BACKDROP
+====================== */
+
+.navbar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 90;
+}
+
+
+body.menu-open {
+  overflow: hidden;
+}
+
+.menu-open .main-content {
+  pointer-events: none;
+}

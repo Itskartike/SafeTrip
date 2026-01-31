@@ -129,7 +129,6 @@ def _profile_to_dict(request, profile: UserProfile):
         "profile": {
             "image_url": image_url,
             "relative_mobile_no": profile.relative_mobile_no,
-            "emergency_email": profile.emergency_email,
             "relatives_mobile_numbers": profile.relatives_mobile_numbers or [],
             "blood_group": profile.blood_group,
             "height_cm": str(profile.height_cm) if profile.height_cm is not None else None,
@@ -443,11 +442,14 @@ def send_emergency_alert(request):
 
     user_id = data.get("user_id")
     email = _normalize_email(data.get("email"))
-    message = (data.get("message") or "Emergency SOS Alert").strip()
+    message = (data.get("message") or "").strip()
     latitude = data.get("latitude")
     longitude = data.get("longitude")
     address = (data.get("address") or "").strip()
     extra_recipients = _as_email_list(data.get("extra_recipients"))
+
+    if not message:
+        return JsonResponse({"success": False, "message": "message is required"}, status=400)
 
     user = None
     if user_id:
@@ -463,20 +465,9 @@ def send_emergency_alert(request):
     else:
         return JsonResponse({"success": False, "message": "user_id or email is required"}, status=400)
 
-    # Get user profile for emergency contact and medical info
-    try:
-        profile = user.profile
-    except:
-        profile = None
-
     recipients = []
     recipients.extend(_as_email_list(getattr(settings, "AUTHORITY_ALERT_EMAILS", [])))
     recipients.extend(extra_recipients)
-    
-    # Add emergency email from profile
-    if profile and profile.emergency_email:
-        recipients.append(profile.emergency_email)
-    
     recipients = sorted(set([r for r in recipients if r]))
 
     if not recipients:
@@ -495,61 +486,39 @@ def send_emergency_alert(request):
     except Exception:
         maps_link = ""
 
-    # Prepare medical information
-    full_name = f"{user.first_name} {user.last_name}".strip() or user.username
-    blood_group = profile.blood_group if profile and profile.blood_group else "-"
-    height_cm = profile.height_cm if profile and profile.height_cm else "-"
-    weight_kg = profile.weight_kg if profile and profile.weight_kg else "-"
-    emergency_contact = profile.relative_mobile_no if profile and profile.relative_mobile_no else "-"
-
-    subject = f"🚨 SafeTrip EMERGENCY ALERT - {full_name}"
+    subject = f"SafeTrip EMERGENCY ALERT - {user.username}"
     body = format_html(
         f"""
     <div style="font-family: Arial, sans-serif; color: #222; max-width: 680px; margin: 0 auto;">
       <div style="background:#b71c1c; color:#fff; padding:16px 18px; border-radius:10px;">
-        <h2 style="margin:0;">🚨 EMERGENCY ALERT</h2>
-        <p style="margin:6px 0 0;">A SafeTrip user triggered an emergency SOS alert and needs immediate assistance!</p>
+        <h2 style="margin:0;">Emergency Alert</h2>
+        <p style="margin:6px 0 0;">A SafeTrip user triggered an emergency alert.</p>
       </div>
 
       <div style="padding:16px 6px;">
-        <h3 style="margin:14px 0 8px; color:#b71c1c;">👤 Person Details</h3>
-        <ul style="margin:0; padding-left:18px; line-height:1.8;">
-          <li><b>Name:</b> {full_name}</li>
+        <h3 style="margin:14px 0 8px;">User Details</h3>
+        <ul style="margin:0; padding-left:18px;">
           <li><b>Username:</b> {user.username}</li>
           <li><b>Email:</b> {user.email}</li>
           <li><b>Contact:</b> {getattr(user, "contact_no", "") or "-"}</li>
-          <li><b>Emergency Contact:</b> {emergency_contact}</li>
         </ul>
 
-        <h3 style="margin:16px 0 8px; color:#b71c1c;">🩺 Medical Information</h3>
-        <ul style="margin:0; padding-left:18px; line-height:1.8;">
-          <li><b>Blood Group:</b> <span style="color:#c62828; font-weight:bold;">{blood_group}</span></li>
-          <li><b>Height:</b> {height_cm} cm</li>
-          <li><b>Weight:</b> {weight_kg} kg</li>
-        </ul>
-
-        <h3 style="margin:16px 0 8px; color:#b71c1c;">💬 Alert Message</h3>
-        <div style="border:1px solid #ddd; border-radius:10px; padding:12px; background:#fff3e0;">
+        <h3 style="margin:16px 0 8px;">Alert Message</h3>
+        <div style="border:1px solid #ddd; border-radius:10px; padding:12px; background:#fafafa;">
           {message}
         </div>
 
-        <h3 style="margin:16px 0 8px; color:#b71c1c;">📍 Current Location</h3>
-        <ul style="margin:0; padding-left:18px; line-height:1.8;">
+        <h3 style="margin:16px 0 8px;">Location</h3>
+        <ul style="margin:0; padding-left:18px;">
           <li><b>Latitude:</b> {latitude if latitude is not None else "-"}</li>
           <li><b>Longitude:</b> {longitude if longitude is not None else "-"}</li>
           <li><b>Address:</b> {address or "-"}</li>
         </ul>
 
-        {format_html(f'<p style="margin-top:12px;"><a href="{maps_link}" target="_blank" rel="noreferrer" style="display:inline-block;background:#b71c1c;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:bold;">🗺️ Open Location in Google Maps</a></p>') if maps_link else ""}
-
-        <div style="margin-top:20px; padding:12px; background:#ffebee; border-left:4px solid #b71c1c; border-radius:4px;">
-          <p style="margin:0; font-weight:bold; color:#b71c1c;">⚠️ URGENT ACTION REQUIRED</p>
-          <p style="margin:4px 0 0; font-size:14px;">This person needs immediate assistance. Please respond as soon as possible.</p>
-        </div>
+        {format_html(f'<p style="margin-top:12px;"><a href="{maps_link}" target="_blank" rel="noreferrer" style="display:inline-block;background:#0057ff;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;">Open in Google Maps</a></p>') if maps_link else ""}
 
         <p style="margin-top:18px; font-size:12px; color:#666;">
-          This email was generated by SafeTrip Emergency Alert System.<br>
-          Time: {timezone.now().strftime("%Y-%m-%d %H:%M:%S %Z")}
+          This email was generated by SafeTrip. Time: {timezone.now().strftime("%Y-%m-%d %H:%M:%S %Z")}
         </p>
       </div>
     </div>
@@ -561,31 +530,11 @@ def send_emergency_alert(request):
     email_message.content_subtype = "html"
     email_message.send(fail_silently=False)
 
-    # Save alert to database
-    from .models import EmergencyAlert
-    alert = EmergencyAlert.objects.create(
-        user=user,
-        name=full_name,
-        email=user.email,
-        phone=getattr(user, "contact_no", "") or "",
-        blood_group=blood_group if blood_group != "-" else "",
-        height_cm=str(height_cm) if height_cm != "-" else "",
-        weight_kg=str(weight_kg) if weight_kg != "-" else "",
-        latitude=latitude,
-        longitude=longitude,
-        address=address,
-        message=message,
-        emergency_contact_phone=emergency_contact if emergency_contact != "-" else "",
-        emergency_email=profile.emergency_email if profile and profile.emergency_email else "",
-        status="PENDING"
-    )
-
     return JsonResponse(
         {
             "success": True,
             "message": "Emergency alert email sent",
             "recipients": recipients,
-            "alert_id": alert.id,
             "user": {"id": user.id, "username": user.username, "email": user.email},
         }
     )
@@ -597,91 +546,87 @@ def me_profile(request):
     """
     NO AUTH VERSION (For Testing)
     Get / update a user profile by user_id.
+    
+    Expected Data:
+      user_id: 1  (Required now, since we don't have a token)
     """
-    # --- 1. GET user_id ---
+    
+    # --- 1. BYPASS AUTH: Get User ID directly from request ---
     user_id = None
+    
     if request.method == "GET":
         user_id = request.GET.get("user_id")
     else:
-        # Try getting user_id from JSON or Form Data
+        # For POST, try to get user_id from JSON body or Form Data
         try:
-            body_data = json.loads(request.body)
-            user_id = body_data.get("user_id")
+            # Try JSON first
+            import json
+            body = json.loads(request.body)
+            user_id = body.get("user_id")
         except:
+            # Fallback to Form Data
             user_id = request.POST.get("user_id")
 
-    # --- 2. FIND USER ---
+    # --- 2. FIND THE USER ---
     if not user_id:
-        # Default to first user if missing (for easy testing)
+        # OPTIONAL: Default to the first user if no ID is sent (Great for lazy testing)
         user = User.objects.first()
         if not user:
-            return JsonResponse({"success": False, "message": "No user_id provided"}, status=400)
+            return JsonResponse({"success": False, "message": "No user_id provided and no users in DB"}, status=400)
     else:
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return JsonResponse({"success": False, "message": "User not found"}, status=404)
 
-    # --- 3. GET/CREATE PROFILE ---
+    # --- 3. EXISTING LOGIC (Unchanged) ---
     profile, _ = UserProfile.objects.get_or_create(user=user)
 
     if request.method == "GET":
         return JsonResponse({"success": True, **_profile_to_dict(request, profile)}, status=200)
 
-    # --- 4. PREPARE DATA ---
+    # POST => update logic
     data = {}
     content_type = (request.content_type or "").lower()
+    
     uploaded_image = None
     
     if "application/json" in content_type:
+        # Re-parse JSON safely
         try:
             data = json.loads(request.body)
         except:
             data = {}
+        uploaded_image = None
     else:
-        # Form Data
+        # multipart/form-data
         data = request.POST.dict()
         uploaded_image = request.FILES.get("image")
-        
-        # Handle list of numbers
         if "relatives_mobile_numbers" in request.POST and hasattr(request.POST, "getlist"):
             lst = request.POST.getlist("relatives_mobile_numbers")
             if len(lst) > 1:
                 data["relatives_mobile_numbers"] = lst
 
-    # --- 5. UPDATE FIELDS ---
     if uploaded_image is not None:
         profile.image = uploaded_image
 
     if "relative_mobile_no" in data:
-        # Convert to string to avoid errors
-        profile.relative_mobile_no = str(data.get("relative_mobile_no")).strip()
-
-    if "emergency_email" in data:
-        profile.emergency_email = str(data.get("emergency_email") or "").strip()
+        profile.relative_mobile_no = _clean_phone(str(data.get("relative_mobile_no")))
 
     if "relatives_mobile_numbers" in data:
-        raw_list = data.get("relatives_mobile_numbers")
-        if isinstance(raw_list, list):
-            profile.relatives_mobile_numbers = raw_list
-        else:
-            profile.relatives_mobile_numbers = [str(raw_list)]
+        profile.relatives_mobile_numbers = _as_phone_list(data.get("relatives_mobile_numbers"))
 
     if "blood_group" in data:
-        profile.blood_group = str(data.get("blood_group") or "").strip().upper()
+        profile.blood_group = (data.get("blood_group") or "").strip().upper()
 
-    # --- THE FIX: Convert numbers to string before stripping ---
     if "height_cm" in data:
-        val = data.get("height_cm")
-        raw = str(val).strip() if val is not None else ""
+        raw = (data.get("height_cm") or "").strip()
         profile.height_cm = None if raw == "" else raw
 
     if "weight_kg" in data:
-        val = data.get("weight_kg")
-        raw = str(val).strip() if val is not None else ""
+        raw = (data.get("weight_kg") or "").strip()
         profile.weight_kg = None if raw == "" else raw
 
-    # --- 6. SAVE ---
     try:
         profile.full_clean()
     except Exception as e:
@@ -689,80 +634,3 @@ def me_profile(request):
 
     profile.save()
     return JsonResponse({"success": True, "message": "Profile updated", **_profile_to_dict(request, profile)}, status=200)
-
-
-@csrf_exempt
-@require_http_methods(["GET"])
-def list_emergency_alerts(request):
-    """
-    List all emergency alerts with optional filtering by status
-    """
-    from .models import EmergencyAlert
-    
-    status_filter = request.GET.get("status", None)
-    
-    alerts = EmergencyAlert.objects.all()
-    if status_filter:
-        alerts = alerts.filter(status=status_filter)
-    
-    alerts_data = []
-    for alert in alerts:
-        alerts_data.append({
-            "id": alert.id,
-            "name": alert.name,
-            "email": alert.email,
-            "phone": alert.phone,
-            "blood_group": alert.blood_group,
-            "height_cm": alert.height_cm,
-            "weight_kg": alert.weight_kg,
-            "latitude": str(alert.latitude) if alert.latitude else None,
-            "longitude": str(alert.longitude) if alert.longitude else None,
-            "address": alert.address,
-            "message": alert.message,
-            "status": alert.status,
-            "emergency_contact_phone": alert.emergency_contact_phone,
-            "emergency_email": alert.emergency_email,
-            "timestamp": alert.created_at.isoformat(),
-            "updated_at": alert.updated_at.isoformat(),
-        })
-    
-    return JsonResponse({
-        "success": True,
-        "alerts": alerts_data,
-        "count": len(alerts_data)
-    })
-
-
-@csrf_exempt
-@require_http_methods(["POST", "PATCH"])
-def update_alert_status(request, alert_id):
-    """
-    Update the status of an emergency alert
-    """
-    from .models import EmergencyAlert
-    
-    try:
-        alert = EmergencyAlert.objects.get(id=alert_id)
-    except EmergencyAlert.DoesNotExist:
-        return JsonResponse({"success": False, "message": "Alert not found"}, status=404)
-    
-    data, err = _json_body(request)
-    if err:
-        return err
-    
-    new_status = data.get("status")
-    if new_status not in ["PENDING", "IN_PROGRESS", "RESOLVED"]:
-        return JsonResponse({"success": False, "message": "Invalid status"}, status=400)
-    
-    alert.status = new_status
-    alert.save()
-    
-    return JsonResponse({
-        "success": True,
-        "message": "Alert status updated",
-        "alert": {
-            "id": alert.id,
-            "status": alert.status,
-            "updated_at": alert.updated_at.isoformat()
-        }
-    })

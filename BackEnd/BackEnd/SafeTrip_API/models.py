@@ -35,9 +35,6 @@ class UserProfile(models.Model):
     # Primary relative contact number
     relative_mobile_no = models.CharField(max_length=15, blank=True, default="")
 
-    # Emergency contact email
-    emergency_email = models.EmailField(blank=True, default="")
-
     # Additional relative contact numbers
     relatives_mobile_numbers = models.JSONField(default=list, blank=True)
 
@@ -69,49 +66,3 @@ class OTPStorage(models.Model):
 
     def __str__(self):
         return f"{self.email} ({'expired' if self.is_expired else 'active'})"
-
-
-class EmergencyAlert(models.Model):
-    """
-    Stores emergency SOS alerts triggered by users
-    """
-    STATUS_CHOICES = [
-        ("PENDING", "Pending"),
-        ("IN_PROGRESS", "In Progress"),
-        ("RESOLVED", "Resolved"),
-    ]
-
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="emergency_alerts", null=True, blank=True)
-    
-    # User details (snapshot at time of alert)
-    name = models.CharField(max_length=255)
-    email = models.EmailField(blank=True)
-    phone = models.CharField(max_length=15, blank=True)
-    
-    # Medical information (snapshot)
-    blood_group = models.CharField(max_length=3, blank=True)
-    height_cm = models.CharField(max_length=10, blank=True)
-    weight_kg = models.CharField(max_length=10, blank=True)
-    
-    # Location data
-    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    address = models.TextField(blank=True)
-    
-    # Alert details
-    message = models.TextField(default="Emergency SOS Alert")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDING")
-    
-    # Emergency contact info
-    emergency_contact_phone = models.CharField(max_length=15, blank=True)
-    emergency_email = models.EmailField(blank=True)
-    
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"Alert #{self.id} - {self.name} ({self.status})"
