@@ -1,0 +1,9 @@
+# --- DJANGO (Backend) ---
+backend/venv/
+backend/env/
+backend/*.sqlite3
+backend/__pycache__/
+backend/*.pyc
+*.log
+.env
+.DS_Store
