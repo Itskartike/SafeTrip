@@ -1,0 +1,62 @@
+.error-container {
+  text-align: center;
+  padding: 2.5rem 2rem;
+  background: var(--color-danger-light);
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-lg);
+  max-width: 400px;
+  margin: 2rem auto;
+}
+
+.error-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.error-container h3 {
+  margin: 0 0 0.5rem;
+  color: #991b1b;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.error-text {
+  color: #b91c1c;
+  margin: 0 0 1.25rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.retry-button {
+  padding: 0.5rem 1.25rem;
+  background: var(--color-danger);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition-fast);
+}
+
+.retry-button:hover {
+  background: var(--color-danger-hover);
+  transform: translateY(-1px);
+}
+
+.retry-button:focus-visible {
+  outline: 2px solid var(--color-danger);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .error-container {
+    margin: 1rem 0.75rem;
+    padding: 1.5rem 1rem;
+  }
+
+  .retry-button {
+    min-height: 44px;
+    padding: 0.625rem 1.25rem;
+  }
+}

@@ -1,0 +1,216 @@
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--color-nav-bg);
+  color: white;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-sm);
+}
+
+.navbar-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.875rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.navbar-brand {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: white;
+  text-decoration: none;
+  transition: opacity var(--transition-fast);
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.navbar-brand:hover {
+  opacity: 0.9;
+}
+
+.navbar-brand:focus-visible {
+  outline-color: rgba(255, 255, 255, 0.8);
+}
+
+.navbar-toggle {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: white;
+  transition: background var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.navbar-toggle:hover {
+  background: var(--color-nav-active);
+}
+
+.navbar-toggle:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+
+.navbar-toggle-bar {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 1px;
+  transition: transform var(--transition), opacity var(--transition-fast);
+}
+
+.navbar-toggle[aria-expanded="true"] .navbar-toggle-bar:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.navbar-toggle[aria-expanded="true"] .navbar-toggle-bar:nth-child(2) {
+  opacity: 0;
+}
+
+.navbar-toggle[aria-expanded="true"] .navbar-toggle-bar:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+.navbar-links {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 0.25rem;
+}
+
+.navbar-links a,
+.navbar-logout {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.875rem;
+  min-height: 44px;
+}
+
+.navbar-links a {
+  color: var(--color-nav-text);
+  text-decoration: none;
+  border-radius: var(--radius);
+  font-weight: 500;
+  font-size: 0.9375rem;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.navbar-links a:hover {
+  color: white;
+  background: var(--color-nav-active);
+}
+
+.navbar-links a.active {
+  color: white;
+  background: var(--color-nav-active);
+}
+
+.navbar-logout {
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-nav-text);
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-family: inherit;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.navbar-logout:hover {
+  color: white;
+  background: var(--color-nav-active);
+}
+
+.navbar-logout:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+
+.navbar-links a:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+
+/* Mobile: hamburger menu */
+@media (max-width: 768px) {
+  .navbar-toggle {
+    display: flex;
+  }
+
+  .navbar-links {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(280px, 100vw);
+    max-width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 4.5rem 0 1.5rem;
+    background: var(--color-nav-bg);
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+    transform: translateX(100%);
+    transition: transform var(--transition-slow);
+    overflow-y: auto;
+    z-index: 101;
+  }
+
+  .navbar-links-open {
+    transform: translateX(0);
+  }
+
+  .navbar-links li {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .navbar-links a,
+  .navbar-logout {
+    padding: 0.875rem 1.25rem;
+    min-height: 48px;
+  }
+
+  .navbar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 99;
+    animation: fadeIn 0.2s ease-out;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Desktop: hide hamburger, show horizontal links */
+@media (min-width: 769px) {
+  .navbar-toggle {
+    display: none;
+  }
+
+  .navbar-backdrop {
+    display: none;
+  }
+}
