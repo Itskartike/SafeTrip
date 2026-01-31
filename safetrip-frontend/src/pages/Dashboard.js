@@ -13,7 +13,7 @@ const Dashboard = () => {
     fetchAlerts,
     updateAlertStatus,
     getStats,
-  } = useAlerts(true);
+  } = useAlerts(false);
 
   const [filter, setFilter] = useState('ALL');
   const [refreshing, setRefreshing] = useState(false);

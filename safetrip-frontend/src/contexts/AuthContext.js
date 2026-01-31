@@ -46,6 +46,26 @@ export function AuthProvider({ children }) {
     const { user: u, profile: p } = await authService.login(username, password);
     setUser(u);
     setProfile(p || null);
+
+    // Request location permission after successful login
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          console.log('User location after login:', { latitude, longitude });
+        },
+        (error) => {
+          console.error('Location access denied or error:', error.message);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        }
+      );
+    } else {
+      console.error('Geolocation is not supported by this browser');
+    }
   };
 
   const register = async (data) => {

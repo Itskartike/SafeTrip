@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import useGeolocation from "../hooks/useGeolocation";
 import "./SafetyTips.css";
 
 const safetyCategories = [
@@ -204,6 +205,7 @@ const safetyCategories = [
 const SafetyTips = () => {
   const [activeCategory, setActiveCategory] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const { location, error, loading, getLocation } = useGeolocation();
 
   const filteredCategories = safetyCategories
     .map((category) => ({
@@ -236,6 +238,31 @@ const SafetyTips = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="search-input"
           />
+        </div>
+
+        <div className="location-section">
+          <button
+            onClick={getLocation}
+            disabled={loading}
+            className="location-btn"
+          >
+            {loading ? "Getting Location..." : "📍 Get Location-Based Tips"}
+          </button>
+          {location && (
+            <div className="location-info">
+              <span className="location-icon">📍</span>
+              <span>
+                Current location: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
+                {location.accuracy && ` (±${Math.round(location.accuracy)}m)`}
+              </span>
+            </div>
+          )}
+          {error && (
+            <div className="location-error">
+              <span className="error-icon">⚠️</span>
+              <span>{error.message}</span>
+            </div>
+          )}
         </div>
 
         <div className="category-filters">
