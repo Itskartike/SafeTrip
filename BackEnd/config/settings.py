@@ -38,7 +38,7 @@ _load_dotenv(BASE_DIR / ".env")
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = 'django-insecure-&17+vb=wkt)4!r8%j&lmq9c@e)0n^&1yj!kq1@%spgps4-pqh2'
 DEBUG = True
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
