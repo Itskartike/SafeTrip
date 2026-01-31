@@ -4,13 +4,50 @@ from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 import json
 from django.contrib.auth import get_user_model
+from django.conf import settings
+from django.core.mail import EmailMessage
+from django.core.signing import TimestampSigner
+import secrets
+from django.utils import timezone
+from django.utils.html import format_html
+from datetime import timedelta
+
+from .models import OTPStorage
 User = get_user_model()
 # Create your views here.
+
+
+def _json_body(request):
+    try:
+        return json.loads(request.body or "{}"), None
+    except json.JSONDecodeError:
+        return None, JsonResponse({"error": "Invalid JSON body"}, status=400)
+
+
+def _normalize_email(email: str) -> str:
+    return (email or "").strip().lower()
+
+
+def _auth_token_for_user(user_id: int) -> str:
+    # Lightweight signed token (not JWT). You can validate later with TimestampSigner.unsign(...).
+    signer = TimestampSigner(salt="safetrip-email-otp")
+    return signer.sign(str(user_id))
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def request_otp(request):
+    # Backwards-compatible alias
+    return send_otp(request)
+
+
 @csrf_exempt 
 @require_http_methods(["POST"])
 def register_user(request):
     try:
-        data = json.loads(request.body)
+        data, err = _json_body(request)
+        if err:
+            return err
         username = data.get("username")
         email = data.get("email")
         password = data.get("password")
@@ -61,3 +98,171 @@ def register_user(request):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def send_otp(request):
+    data, err = _json_body(request)
+    if err:
+        return err
+
+    email_lower = _normalize_email(data.get("email"))
+    if not email_lower:
+        return JsonResponse({"error": "email is required"}, status=400)
+
+    try:
+        user = User.objects.get(email=email_lower)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "No user found with this email"}, status=404)
+
+    now = timezone.now()
+
+    otp_length = int(getattr(settings, "OTP_LENGTH", 6))
+    otp_resend_seconds = int(getattr(settings, "OTP_RESEND_SECONDS", 60))
+    block_user_minutes = int(getattr(settings, "BLOCK_USER_MINUTES", 10))
+    max_send_attempts = int(getattr(settings, "OTP_MAX_SENDS_PER_WINDOW", 3))
+
+    last_otp = OTPStorage.objects.filter(email=email_lower).order_by("-created_at").first()
+    previous_counter = 0
+
+    if last_otp:
+        time_diff = now - last_otp.created_at
+
+        # too soon to resend
+        if time_diff < timedelta(seconds=otp_resend_seconds):
+            return JsonResponse(
+                {"success": False, "message": f"Please wait {otp_resend_seconds} seconds before requesting another OTP"},
+                status=400,
+            )
+
+        # reset counter after block window
+        if time_diff <= timedelta(minutes=block_user_minutes):
+            previous_counter = int(last_otp.counter or 0)
+
+        # block if too many attempts
+        if previous_counter >= max_send_attempts:
+            return JsonResponse(
+                {"success": False, "message": "Too many attempts. Try again in sometime."},
+                status=400,
+            )
+
+    # expire all valid old OTPs before sending a new one
+    OTPStorage.objects.filter(email=email_lower, is_expired=False).update(is_expired=True)
+
+    # Generate OTP (secure random)
+    min_n = 10 ** (otp_length - 1)
+    max_n = (10 ** otp_length) - 1
+    otp = str(secrets.randbelow(max_n - min_n + 1) + min_n)
+
+    OTPStorage.objects.create(
+        email=email_lower,
+        otp=otp,
+        counter=previous_counter + 1,
+        is_expired=False,
+    )
+
+    lock_expiry_minutes = int(getattr(settings, "LOCK_EXPIRY_MINUTES", 5))
+
+    subject = "SafeTrip - Your OTP Code"
+    body = format_html(
+        f"""
+    <div style="
+        font-family: 'Helvetica Neue', Arial, sans-serif;
+        color: #333;
+        text-align: center;
+        border: 2px solid #0057ff;
+        padding: 25px;
+        margin: 20px auto;
+        border-radius: 12px;
+        max-width: 600px;
+        box-shadow: 0px 4px 12px rgba(0,0,0,0.2);
+    ">
+        <p style="font-size: 20px; font-weight: bold; color: #0057ff;">Secure Verification</p>
+        <p style="font-size: 16px;">Dear User,</p>
+        <p style="font-size: 16px;">Your One-Time Password (OTP) for verification is:</p>
+        <div style="
+            background-color: #0057ff;
+            color: white;
+            font-size: 32px;
+            padding: 18px 30px;
+            display: inline-block;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-weight: bold;
+            letter-spacing: 4px;
+            text-align: center;
+            box-shadow: 0px 5px 10px rgba(0,0,0,0.3);
+        ">{otp}</div>
+        <p style="font-size: 16px; font-weight: bold; color: #d32f2f;">This OTP is valid for {lock_expiry_minutes} minutes. Do not share it with anyone.</p>
+        <p style="font-size: 14px; color: #555;">If you did not request this, please ignore this email.</p>
+        <div style="border-top: 2px solid #0057ff; margin: 20px auto; width: 60%;"></div>
+        <p style="font-size: 16px;">Best regards,</p>
+        <p style="font-size: 18px; font-weight: bold; color: #0057ff;">Team SafeTrip</p>
+    </div>
+        """
+    )
+
+    from_email = getattr(settings, "EMAIL_HOST_USER", None) or getattr(settings, "DEFAULT_FROM_EMAIL", None)
+    if not from_email:
+        from_email = "no-reply@safetrip.local"
+
+    email_message = EmailMessage(
+        subject=subject,
+        body=body,
+        from_email=from_email,
+        to=[email_lower],
+    )
+    email_message.content_subtype = "html"
+    email_message.send(fail_silently=False)
+
+    return JsonResponse({"success": True, "message": "OTP sent successfully", "email": email_lower, "user_id": user.id})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def verify_otp(request):
+    data, err = _json_body(request)
+    if err:
+        return err
+
+    email_lower = _normalize_email(data.get("email"))
+    otp = (data.get("otp") or "").strip()
+
+    if not email_lower or not otp:
+        return JsonResponse({"success": False, "message": "Email and OTP are required"}, status=400)
+
+    now = timezone.now()
+    lock_expiry_minutes = int(getattr(settings, "LOCK_EXPIRY_MINUTES", 5))
+
+    otp_entry = OTPStorage.objects.filter(email=email_lower, otp=otp).order_by("-created_at").first()
+    if not otp_entry:
+        return JsonResponse({"success": False, "message": "Invalid OTP"}, status=400)
+
+    # expired by time
+    if (now - otp_entry.created_at) > timedelta(minutes=lock_expiry_minutes):
+        otp_entry.is_expired = True
+        otp_entry.save(update_fields=["is_expired"])
+        return JsonResponse({"success": False, "message": "OTP expired"}, status=400)
+
+    if otp_entry.is_expired:
+        return JsonResponse({"success": False, "message": "OTP already expired"}, status=400)
+
+    otp_entry.is_expired = True
+    otp_entry.save(update_fields=["is_expired"])
+
+    try:
+        user = User.objects.get(email=email_lower)
+    except User.DoesNotExist:
+        return JsonResponse({"success": False, "message": "No user found with this email"}, status=404)
+
+    token = _auth_token_for_user(user.id)
+    return JsonResponse(
+        {
+            "success": True,
+            "message": "OTP verified successfully",
+            "token": token,
+            "user": {"id": user.id, "username": user.username, "email": user.email},
+        },
+        status=200,
+    )
